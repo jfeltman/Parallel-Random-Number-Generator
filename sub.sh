@@ -5,5 +5,6 @@
 #SBATCH --time=00:10:00
 
 #"np" stands for number of processes.
-#this comimand will run the job on 2 processes. 
-mpirun -np 2 ~/Parallel-Random-Number-Generator/proj4
+#this comimand will run the job on 2 processes.
+# command line args - proj4 A B x0
+mpirun -np 4 ~/Parallel-Random-Number-Generator/proj4 1 3 0

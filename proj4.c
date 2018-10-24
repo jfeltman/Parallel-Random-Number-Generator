@@ -25,9 +25,6 @@ void multiplyMatrix(int numRowsInSeed, int seedMatrix[][2], int mNext[][2], int 
 }
 
 void serial_matrix(int n, int x0, int output[]) {
-
-    output[0] = x0;
-
     int M[2][2] = {
         { A, 0 },
         { B, 1 }
@@ -39,6 +36,8 @@ void serial_matrix(int n, int x0, int output[]) {
     int seedMatrix[1][2] = { 
         { x0, 1 }
     };
+    
+    output[0] = x0;
 
     int i;
     for(i = 1; i < n; i++) {
@@ -52,33 +51,109 @@ void serial_matrix(int n, int x0, int output[]) {
     }
 }
 
+// Help for debugging
+void serial_prefix(int A[], int output[], int n) {
+    int sum = 0, i;
+
+    for(i = 0; i < n; i++) {
+        output[i] = sum + A[i];
+        sum = output[i];
+        printf("%d ", output[i]);
+    }
+    printf("\n");
+}
+
+// assume plus for now
+// assume n = 12, p = 4 for now
+// not sure if we need this right now
+void parallel_prefix(int A[], int n) {
+    // Pre Step - Decompose array into n/p blocks 
+    
+    // Step 1. Sum up all local values into sumRank (from i=o to n/p - 1)
+}
+
+void printMatrix(int m[][2], int rows, int cols) {
+    int r, c;
+    for(r = 0; r < rows; r++) {
+        for(c = 0; c < cols; c++) {
+            printf("%d ", m[r][c]);
+        }
+        printf("\n");
+    }
+}
+
+// A, B, x0, p, PRIME all globals so every rank should have them already
+void parallel_random_number_generator() {
+    // Step 2. Init Matrix M and M_ZERO, xLocal
+    int M[2][2] = { 
+        { A, 0 },
+        { B, 1 }
+    };
+
+    int M_ZERO[2][2] = { 
+        { 1, 0 },
+        { 0, 1 }
+    };
+
+    // Array that holds 2D arrays
+    int** xLocal[n/p];
+    int i;
+    for(i = 0; i < n/p; i++) {
+        xLocal[i] = M;
+    }
+
+    for(i = 0; i < n/p; i++) {
+        printMatrix(xLocal[i], 2, 2);
+    }
+    
+    // Step 3. At each rank
+    // Mlocal = MZERO
+    // for i =0 to n/p-1
+    //      Mlocal = Mlocal * Xlocal[i]
+}
+
 int main(int argc, char *argv[])
 {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &p);
 
-    A = 2;
-    B = 4;
+    printf("my rank=%d\n",rank);
+    printf("Rank=%d: number of processes =%d\n",rank,p);
 
-    int baselineRandNums[10];
-    int matrixRandNums[10];
+    char *tempA = argv[1];
+    char *tempB = argv[2];
+    char *tempInitialSeed = argv[3];
+    A = atoi(tempA);
+    B = atoi(tempB);
+    initialSeed = atoi(tempInitialSeed);
 
-    serial_baseline(10, 1, baselineRandNums); 
-    serial_matrix(10, 1, matrixRandNums);
+    n = 13;
+
+    int baselineRandNums[n];
+    int matrixRandNums[n];
+
+    serial_baseline(n, initialSeed, baselineRandNums); 
+    serial_matrix(n, initialSeed, matrixRandNums);
 
     int i;
     printf("BASELINE SERIAL: ");
-    for(i = 0; i < 10; i++) {
+    for(i = 0; i < n; i++) {
         printf("%d ", baselineRandNums[i]);
     }
     printf("\n");
     
     printf("MATRIX SERIAL: ");
-    for(i = 0; i < 10; i++) {
+    for(i = 0; i < n; i++) {
         printf("%d ", matrixRandNums[i]);
     }
     printf("\n");
+
+    int A[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+    //int B[8];
+    //serial_prefix(A, B, 8);
+
+    parallel_random_number_generator();
 
     MPI_Finalize();
     return 0;
