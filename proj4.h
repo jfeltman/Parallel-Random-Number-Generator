@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <mpi.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <math.h>
 
 #define PRIME 68111
 
