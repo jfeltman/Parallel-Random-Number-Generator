@@ -15,4 +15,4 @@ int A, B, initialSeed;
 
 void multiplyMatrix(int numRowsInSeed, int seedMatrix[][2], int mNext[][2], int product[][2]);
 void serial_baseline(int n, int x0, int output[]);
-void serial_matrix(int n, int x0,  int output[]);
+//void serial_matrix(int n, int x0,  int output[]);

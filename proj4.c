@@ -1,5 +1,15 @@
 #include "proj4.h"
 
+void printMatrix(int m[][2], int rows, int cols) {
+    int r, c;
+    for(r = 0; r < rows; r++) {
+        for(c = 0; c < cols; c++) {
+            printf("%d ", m[r][c]);
+        }
+        printf("\n");
+    }
+}
+
 void serial_baseline(int n, int x0, int output[]) {
     output[0] = x0;
     
@@ -24,23 +34,24 @@ void multiplyMatrix(int numRowsInSeed, int seedMatrix[][2], int mNext[][2], int 
     }
 }
 
-void serial_matrix(int n, int x0, int output[]) {
+void serial_matrix(int n, int x0, int output[], int mOff[][2]) {
     int M[2][2] = {
         { A, 0 },
         { B, 1 }
     };
 
     int mNext[2][2];
-    memcpy(mNext, M, sizeof(M));
+    memcpy(mNext, mOff, sizeof(mNext));
 
     int seedMatrix[1][2] = { 
         { x0, 1 }
     };
     
-    output[0] = x0;
+    // Dont think we need this anymore?
+    //output[0] = x0;
 
     int i;
-    for(i = 1; i < n; i++) {
+    for(i = 0; i < n; i++) {
         int product[1][2];
         multiplyMatrix(1, seedMatrix, mNext, product);
         output[i] = product[0][0];
@@ -61,41 +72,6 @@ void serial_prefix(int A[], int output[], int n) {
         printf("%d ", output[i]);
     }
     printf("\n");
-}
-
-// Make it p element prefix not n-element
-// assume n = p
-// pass in op (plus, mult, etc.)
-void parallel_prefix(int A[]) {
-   int local = A[rank];
-   int global = A[rank];
-   int receivedGlobal;
-
-   int v = 1;
-   int t, mate;
-
-   for(t = 0; t < log2(p); t++) {
-        mate = rank ^ v;
-        v = v << 1;
-
-        //Send global to mate
-        MPI_Send(&global, 1, MPI_INT, mate, 0, MPI_COMM_WORLD);
-        printf("RANK %d sent %d to %d\n", rank, global, mate);
-
-        //Recieve recieveGlobal from mate
-        MPI_Status status;
-        MPI_Recv(&receivedGlobal, 1, MPI_INT, mate, 0, MPI_COMM_WORLD, &status);
-        printf("RANK %d received %d from %d\n", rank, receivedGlobal, mate);
-
-        global = global + receivedGlobal;
-        
-        if (mate < rank) {
-            // replace '+' with op
-            local = local + receivedGlobal;
-        }
-   }
-   // output local;
-   printf("RANK %d | Local = %d\n", rank, local);
 }
 
 // P-Element Parallel Prefix
@@ -137,18 +113,8 @@ void matrix_parallel_prefix(int mLocal[][2], int outputM[][2]) {
     memcpy(outputM, local, sizeof(local));
 }
 
-void printMatrix(int m[][2], int rows, int cols) {
-    int r, c;
-    for(r = 0; r < rows; r++) {
-        for(c = 0; c < cols; c++) {
-            printf("%d ", m[r][c]);
-        }
-        printf("\n");
-    }
-}
-
 // A, B, x0, p, PRIME all globals so every rank should have them already
-void parallel_random_number_generator() {
+void parallel_random_number_generator(int n, int x0) {
     // Step 2. Init Matrix M and M_ZERO, xLocal
     int M[2][2] = { 
         { A, 0 },
@@ -163,6 +129,7 @@ void parallel_random_number_generator() {
     // Array that holds 2D arrays
     int** xLocal[n/p];
     int i;
+    // fill xLocal with M
     for(i = 0; i < n/p; i++) {
         xLocal[i] = M;
     }
@@ -188,16 +155,27 @@ void parallel_random_number_generator() {
     printMatrix(M_Local, 2, 2);
 
     // Step 4. Run p-element parallel prefix, with each process providing its corresponding Mlocal as input
-    // , and matrix multiplaction operator. (Maybe use mod? not sure)
     // Output will be a 2x2 matrix M_off, which represents the prefix matrix product.
-   
+    int M_Off[2][2];
+    matrix_parallel_prefix(M_Local, M_Off);
 
+    printf("RANK %d, step 4, parallel prefix\n", rank);
+    printMatrix(M_Off, 2, 2);
+    printf("-----------\n");
+    
     // Step 5. At every process:
     //      Call serial_matrix(n/p) with 2 modificatoins:
-    //              Init its Mnext = M_off (from step 4)
-    //              Run its for loop from 0 to n -1
     //      Output X from every process
+    int output[n/p];
+    serial_matrix(n/p, x0, output, M_Off);
 
+    // printing output array
+    MPI_Barrier(MPI_COMM_WORLD);
+    printf("RANK %d, PARALLEL RANDOM NUMBER GENERATOR: ", rank);
+    for(i = 0; i < n/p; i++) {
+        printf("%d ", output[i]);
+    }
+    printf("\n\n");
 }
 
 int main(int argc, char *argv[])
@@ -219,10 +197,7 @@ int main(int argc, char *argv[])
     n = 12;
 
     int baselineRandNums[n];
-    int matrixRandNums[n];
-
     serial_baseline(n, initialSeed, baselineRandNums); 
-    serial_matrix(n, initialSeed, matrixRandNums);
 
     int i;
     printf("BASELINE SERIAL: ");
@@ -231,31 +206,7 @@ int main(int argc, char *argv[])
     }
     printf("\n");
     
-    printf("MATRIX SERIAL: ");
-    for(i = 0; i < n; i++) {
-        printf("%d ", matrixRandNums[i]);
-    }
-    printf("\n");
-
-    int A[4] = { 1, 2, 3, 4 };
-    int B[4];
-    //serial_prefix(A, B, 4);
-
-    //parallel_prefix(A);
-
-    int local[2][2] = {
-        { rank+1, rank+1 },
-        { rank+1, rank+1 }
-    };
-
-    int out[2][2];
-
-    matrix_parallel_prefix(local, out);
-    
-    printf("RANK %d\n", rank);
-    printMatrix(out, 2, 2);
-
-    //parallel_random_number_generator();
+    parallel_random_number_generator(n, initialSeed);
 
     MPI_Finalize();
     return 0;
