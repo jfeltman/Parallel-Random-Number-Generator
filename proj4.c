@@ -66,7 +66,7 @@ void serial_prefix(int A[], int output[], int n) {
 // Make it p element prefix not n-element
 // assume n = p
 // pass in op (plus, mult, etc.)
-void parallel_prefix(int A[], int n) {
+void parallel_prefix(int A[]) {
    int local = A[rank];
    int global = A[rank];
    int receivedGlobal;
@@ -79,17 +79,62 @@ void parallel_prefix(int A[], int n) {
         v = v << 1;
 
         //Send global to mate
+        MPI_Send(&global, 1, MPI_INT, mate, 0, MPI_COMM_WORLD);
+        printf("RANK %d sent %d to %d\n", rank, global, mate);
+
         //Recieve recieveGlobal from mate
-        
-        // global = global (op) recvGlobal
+        MPI_Status status;
+        MPI_Recv(&receivedGlobal, 1, MPI_INT, mate, 0, MPI_COMM_WORLD, &status);
+        printf("RANK %d received %d from %d\n", rank, receivedGlobal, mate);
+
+        global = global + receivedGlobal;
         
         if (mate < rank) {
             // replace '+' with op
             local = local + receivedGlobal;
         }
    }
-
    // output local;
+   printf("RANK %d | Local = %d\n", rank, local);
+}
+
+// P-Element Parallel Prefix
+void matrix_parallel_prefix(int mLocal[][2], int outputM[][2]) {
+    int local[2][2];
+    memcpy(local, mLocal, sizeof(local));
+
+    int global[2][2], recvGlobal[2][2];
+    memcpy(global, mLocal, sizeof(global));
+
+    int v = 1;
+    int t, mate;
+
+    for(t = 0; t < log2(p); t++) {
+        mate = rank ^ v;
+        v = v << 1;        
+
+        // send 2x2 matrix
+        MPI_Send(&(global[0][0]), 4, MPI_INT, mate, 0, MPI_COMM_WORLD);
+
+        MPI_Status status;
+        // recv 2x2 matrix
+        MPI_Recv(&(recvGlobal[0][0]), 4, MPI_INT, mate, 0, MPI_COMM_WORLD, &status);
+
+        // global *= recievedGlobal;
+        int tempG[2][2];
+        multiplyMatrix(2, global, recvGlobal, tempG);
+        memcpy(global, tempG, sizeof(global));
+
+        if (mate < rank) {
+            // local = local * recvGlobal
+            int tempL[2][2];
+            multiplyMatrix(2, local, recvGlobal, tempL);
+            memcpy(local, tempL, sizeof(local));
+        }
+    }
+    
+    // output local
+    memcpy(outputM, local, sizeof(local));
 }
 
 void printMatrix(int m[][2], int rows, int cols) {
@@ -192,9 +237,23 @@ int main(int argc, char *argv[])
     }
     printf("\n");
 
-    //int A[12] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
-    //int B[8];
-    //serial_prefix(A, B, 8);
+    int A[4] = { 1, 2, 3, 4 };
+    int B[4];
+    //serial_prefix(A, B, 4);
+
+    //parallel_prefix(A);
+
+    int local[2][2] = {
+        { rank+1, rank+1 },
+        { rank+1, rank+1 }
+    };
+
+    int out[2][2];
+
+    matrix_parallel_prefix(local, out);
+    
+    printf("RANK %d\n", rank);
+    printMatrix(out, 2, 2);
 
     //parallel_random_number_generator();
 
