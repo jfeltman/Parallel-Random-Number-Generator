@@ -19,14 +19,47 @@ void serial_baseline(int n, int x0, int output[]) {
     }
 }
 
-void multiplyMatrix(int numRowsInSeed, int seedMatrix[][2], int mNext[][2], int product[][2]) {
+void unchanged_serial_matrix(int n, int x0, int output[]) {
+    struct timeval start, end;
+
+    gettimeofday(&start, NULL);    
+    int M[2][2] = {
+        { A, 0 },
+        { B, 1 }
+    };
+
+    int mNext[2][2];
+    memcpy(mNext, M, sizeof(mNext));
+
+    int seedMatrix[1][2] = {
+        { x0, 1 }
+    };
+
+    output[0] = x0;
+
+    int i;
+    for(i = 1; i < n; i++) {
+        int product[1][2];
+        multiplyMatrix(1, seedMatrix, mNext, product);
+        output[i] = product[0][0];
+
+        int tempMNext[2][2];
+        multiplyMatrix(2, mNext, M, tempMNext);
+        memcpy(mNext, tempMNext, sizeof(mNext));
+    }
+    gettimeofday(&end, NULL);
+    long time = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+    serialRuntime += time;
+}
+
+void multiplyMatrix(int numRowsInLeft, int leftMatrix[][2], int rightMatrix[][2], int product[][2]) {
     int sum = 0;
    
     int a, b, c;
-    for(a = 0; a < numRowsInSeed; a++) {
+    for(a = 0; a < numRowsInLeft; a++) {
         for(b = 0; b < 2; b++) {
             for(c = 0; c < 2; c++) {
-                sum += (seedMatrix[a][c] * mNext[c][b]) % PRIME;
+                sum = (sum + leftMatrix[a][c] * rightMatrix[c][b]) % PRIME;
             }
             product[a][b] = sum;
             sum = 0;
@@ -47,9 +80,6 @@ void serial_matrix(int n, int x0, int output[], int mOff[][2]) {
         { x0, 1 }
     };
     
-    // Dont think we need this anymore?
-    //output[0] = x0;
-
     int i;
     for(i = 0; i < n; i++) {
         int product[1][2];
@@ -62,22 +92,13 @@ void serial_matrix(int n, int x0, int output[], int mOff[][2]) {
     }
 }
 
-// Help for debugging
-void serial_prefix(int A[], int output[], int n) {
-    int sum = 0, i;
-
-    for(i = 0; i < n; i++) {
-        output[i] = sum + A[i];
-        sum = output[i];
-        printf("%d ", output[i]);
-    }
-    printf("\n");
-}
-
 // P-Element Parallel Prefix
 void matrix_parallel_prefix(int mLocal[][2], int outputM[][2]) {
-    int local[2][2];
-    memcpy(local, mLocal, sizeof(local));
+    int local[2][2] = {
+        { 1, 0 },
+        { 0, 1 }
+    };
+    //memcpy(local, mLocal, sizeof(local));
 
     int global[2][2], recvGlobal[2][2];
     memcpy(global, mLocal, sizeof(global));
@@ -114,7 +135,10 @@ void matrix_parallel_prefix(int mLocal[][2], int outputM[][2]) {
 }
 
 // A, B, x0, p, PRIME all globals so every rank should have them already
-void parallel_random_number_generator(int n, int x0) {
+void parallel_random_number_generator(int output[]) {
+    struct timeval start, end;
+
+    gettimeofday(&start, NULL);
     // Step 2. Init Matrix M and M_ZERO, xLocal
     int M[2][2] = { 
         { A, 0 },
@@ -127,7 +151,7 @@ void parallel_random_number_generator(int n, int x0) {
     };
 
     // Array that holds 2D arrays
-    int** xLocal[n/p];
+    int **xLocal[n/p];
     int i;
     // fill xLocal with M
     for(i = 0; i < n/p; i++) {
@@ -151,31 +175,29 @@ void parallel_random_number_generator(int n, int x0) {
         multiplyMatrix(2, M_Local, xLocal[i], tempLocal);
         memcpy(M_Local, tempLocal, sizeof(M_Local));
     }
-    printf("Result of step 3:\n");
-    printMatrix(M_Local, 2, 2);
+
+    // debugging
+    //printf("Result of step 3:\n");
+    //printMatrix(M_Local, 2, 2);
 
     // Step 4. Run p-element parallel prefix, with each process providing its corresponding Mlocal as input
     // Output will be a 2x2 matrix M_off, which represents the prefix matrix product.
     int M_Off[2][2];
     matrix_parallel_prefix(M_Local, M_Off);
 
-    printf("RANK %d, step 4, parallel prefix\n", rank);
-    printMatrix(M_Off, 2, 2);
-    printf("-----------\n");
+    // debugging
+    //printf("RANK %d, step 4, parallel prefix\n", rank);
+    //printMatrix(M_Off, 2, 2);
+    //printf("-----------\n");
     
     // Step 5. At every process:
     //      Call serial_matrix(n/p) with 2 modificatoins:
     //      Output X from every process
-    int output[n/p];
-    serial_matrix(n/p, x0, output, M_Off);
+    serial_matrix(n/p, initialSeed, output, M_Off);
+    gettimeofday(&end, NULL);
 
-    // printing output array
-    MPI_Barrier(MPI_COMM_WORLD);
-    printf("RANK %d, PARALLEL RANDOM NUMBER GENERATOR: ", rank);
-    for(i = 0; i < n/p; i++) {
-        printf("%d ", output[i]);
-    }
-    printf("\n\n");
+    long time = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+    totalParallelRuntime += time;
 }
 
 int main(int argc, char *argv[])
@@ -187,26 +209,61 @@ int main(int argc, char *argv[])
     printf("my rank=%d\n",rank);
     printf("Rank=%d: number of processes =%d\n",rank,p);
 
-    char *tempA = argv[1];
-    char *tempB = argv[2];
-    char *tempInitialSeed = argv[3];
-    A = atoi(tempA);
-    B = atoi(tempB);
-    initialSeed = atoi(tempInitialSeed);
-
-    n = 12;
-
+    A = atoi(argv[1]);
+    B = atoi(argv[2]);
+    initialSeed = atoi(argv[3]);
+    n = atoi(argv[4]);
+    PRIME = atoi(argv[5]);
+    
+    printf("INPUTS = A: %d | B: %d | x0: %d | n: %d | PRIME: %d\n", A, B, initialSeed, n, PRIME);
+ 
     int baselineRandNums[n];
-    serial_baseline(n, initialSeed, baselineRandNums); 
+//    serial_baseline(n, initialSeed, baselineRandNums); 
+
+    unchanged_serial_matrix(n, initialSeed, baselineRandNums);
 
     int i;
     printf("BASELINE SERIAL: ");
     for(i = 0; i < n; i++) {
+        if(i % (n/p) == 0) {
+            printf(" | ");
+        }
         printf("%d ", baselineRandNums[i]);
     }
     printf("\n");
     
-    parallel_random_number_generator(n, initialSeed);
+    int localOutput[n/p];
+    parallel_random_number_generator(localOutput);
+
+//    printf("RANK %d, PARALLEL RANDOM NUMBER GENERATOR: ", rank);
+//    for(i = 0; i < n/p; i++) {
+//        printf("%d ", localOutput[i]);
+//    }
+//    printf("\n"); 
+       
+    // Gather local outputs into rank 0
+    int finalSequence[n];    
+    struct timeval start, end;
+    
+    gettimeofday(&start, NULL);
+    MPI_Gather(localOutput, n/p, MPI_INT, finalSequence, n/p, MPI_INT, 0, MPI_COMM_WORLD);
+    gettimeofday(&end, NULL);
+
+    long time = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+    totalParallelRuntime += time;
+
+    printf("RANK: %d | Serial Time: %ld usec\n", rank, serialRuntime);
+    printf("RANK: %d | Parallel Time: %ld usec\n", rank, totalParallelRuntime);
+
+    printf("MPI GATHER\n");
+    if(rank == 0) {
+        printf("FINAL SEQUENCE: ");
+        for(i = 0; i < n; i++) {
+            printf("%d ", finalSequence[i]);
+        }
+        printf("\n");
+    }
+
 
     MPI_Finalize();
     return 0;

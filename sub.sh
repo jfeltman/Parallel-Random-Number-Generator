@@ -6,5 +6,6 @@
 
 #"np" stands for number of processes.
 #this comimand will run the job on 2 processes.
-# command line args - proj4 A B x0
-mpirun -np 4 ~/Parallel-Random-Number-Generator/proj4 1 3 0
+# command line args - proj4 A B x0 n PRIME
+# 524288 1102709
+mpirun -np 4 ~/Parallel-Random-Number-Generator/proj4 87 253 9 32 97
