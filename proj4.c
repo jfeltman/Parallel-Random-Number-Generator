@@ -188,11 +188,9 @@ void parallel_random_number_generator(int output[]) {
     // debugging
     //printf("RANK %d, step 4, parallel prefix\n", rank);
     //printMatrix(M_Off, 2, 2);
-    //printf("-----------\n");
     
-    // Step 5. At every process:
-    //      Call serial_matrix(n/p) with 2 modificatoins:
-    //      Output X from every process
+    // Step 5. Call serial_matrix(n/p) with 2 modificatoins:
+    // Output X from every process
     serial_matrix(n/p, initialSeed, output, M_Off);
     gettimeofday(&end, NULL);
 
@@ -216,24 +214,31 @@ int main(int argc, char *argv[])
     PRIME = atoi(argv[5]);
     
     printf("INPUTS = A: %d | B: %d | x0: %d | n: %d | PRIME: %d\n", A, B, initialSeed, n, PRIME);
- 
-    int baselineRandNums[n];
-//    serial_baseline(n, initialSeed, baselineRandNums); 
-
-    unchanged_serial_matrix(n, initialSeed, baselineRandNums);
 
     int i;
-    printf("BASELINE SERIAL: ");
-    for(i = 0; i < n; i++) {
-        if(i % (n/p) == 0) {
-            printf(" | ");
-        }
-        printf("%d ", baselineRandNums[i]);
-    }
-    printf("\n");
+    // Running 10 Trials to get average runtime
+    for(i = 0; i < 10; i++) {
+        int baselineRandNums[n];
+        int localOutput[n/p];
     
-    int localOutput[n/p];
-    parallel_random_number_generator(localOutput);
+        unchanged_serial_matrix(n, initialSeed, baselineRandNums);
+        parallel_random_number_generator(localOutput);
+    }
+    
+//    int baselineRandNums[n];
+//    unchanged_serial_matrix(n, initialSeed, baselineRandNums);
+
+//    printf("BASELINE SERIAL: ");
+//    for(i = 0; i < n; i++) {
+//        if(i % (n/p) == 0) {
+//            printf(" | ");
+//        }
+//        printf("%d ", baselineRandNums[i]);
+//    }
+//    printf("\n");
+
+//    int localOutput[n/p];
+//    parallel_random_number_generator(localOutput);
 
 //    printf("RANK %d, PARALLEL RANDOM NUMBER GENERATOR: ", rank);
 //    for(i = 0; i < n/p; i++) {
@@ -241,29 +246,10 @@ int main(int argc, char *argv[])
 //    }
 //    printf("\n"); 
        
-    // Gather local outputs into rank 0
-    int finalSequence[n];    
-    struct timeval start, end;
-    
-    gettimeofday(&start, NULL);
-    MPI_Gather(localOutput, n/p, MPI_INT, finalSequence, n/p, MPI_INT, 0, MPI_COMM_WORLD);
-    gettimeofday(&end, NULL);
-
-    long time = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
-    totalParallelRuntime += time;
-
+    long averageSerialRuntime = serialRuntime / 10;
+    long averageParallelRuntime = totalParallelRuntime / 10;
     printf("RANK: %d | Serial Time: %ld usec\n", rank, serialRuntime);
-    printf("RANK: %d | Parallel Time: %ld usec\n", rank, totalParallelRuntime);
-
-    printf("MPI GATHER\n");
-    if(rank == 0) {
-        printf("FINAL SEQUENCE: ");
-        for(i = 0; i < n; i++) {
-            printf("%d ", finalSequence[i]);
-        }
-        printf("\n");
-    }
-
+    printf("RANK: %d | Parallel Time: %ld usec\n", rank, averageParallelRuntime);
 
     MPI_Finalize();
     return 0;
